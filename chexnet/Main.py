@@ -19,6 +19,8 @@ def runTrain():
     DENSENET121 = 'DENSE-NET-121'
     DENSENET169 = 'DENSE-NET-169'
     DENSENET201 = 'DENSE-NET-201'
+    RESNET18 = "RES-NET-18"
+    RESNET50 = "RES-NET-50"
     
     timestampTime = time.strftime("%H%M%S")
     timestampDate = time.strftime("%d%m%Y")
@@ -37,16 +39,18 @@ def runTrain():
     #---- Neural network parameters: type of the network, is it pre-trained 
     #---- on imagenet, number of classes
     nnArchitecture = DENSENET121
+    # nnArchitecture = RESNET18
+    # nnArchitecture = RESNET50
     nnIsTrained = True
     nnClassCount = 14
     
     #---- Training settings: batch size, maximum number of epochs
 #     trBatchSize = 16
-    trBatchSize = 8
+    trBatchSize = 128
     trMaxEpoch = 100
     
     #---- Parameters related to image transforms: size of the down-scaled image, cropped image
-    imgtransResize = 256
+    imgtransResize = 128
     imgtransCrop = 224
         
     pathModel = 'm-' + timestampLaunch + '.pth.tar'
@@ -64,9 +68,11 @@ def runTest():
     pathDirData = './database'
     pathFileTest = './dataset/test_1.txt'
     nnArchitecture = 'DENSE-NET-121'
+    # nnArchitecture = 'RES-NET-18'
+    # nnArchitecture = 'RES-NET-50'
     nnIsTrained = True
     nnClassCount = 14
-    trBatchSize = 16
+    trBatchSize = 128
     imgtransResize = 256
     imgtransCrop = 224
     

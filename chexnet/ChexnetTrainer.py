@@ -3,6 +3,8 @@ import numpy as np
 import time
 import sys
 
+import pdb
+
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
@@ -13,12 +15,17 @@ import torch.nn.functional as tfunc
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as func
+import torch.cuda as cutorch
 
 from sklearn.metrics.ranking import roc_auc_score
 
 from DensenetModels import DenseNet121
 from DensenetModels import DenseNet169
 from DensenetModels import DenseNet201
+
+from ResnetModels import ResNet18
+from ResnetModels import ResNet50
+
 from DatasetGenerator import DatasetGenerator
 
 
@@ -47,6 +54,8 @@ class ChexnetTrainer ():
         if nnArchitecture == 'DENSE-NET-121': model = DenseNet121(nnClassCount, nnIsTrained).cuda()
         elif nnArchitecture == 'DENSE-NET-169': model = DenseNet169(nnClassCount, nnIsTrained).cuda()
         elif nnArchitecture == 'DENSE-NET-201': model = DenseNet201(nnClassCount, nnIsTrained).cuda()
+        elif nnArchitecture == 'RES-NET-18': model = ResNet18(nnClassCount, nnIsTrained).cuda()
+        elif nnArchitecture == 'RES-NET-50': model = ResNet50(nnClassCount, nnIsTrained).cuda()
         
         model = torch.nn.DataParallel(model).cuda()
                 
@@ -66,7 +75,7 @@ class ChexnetTrainer ():
               
         dataLoaderTrain = DataLoader(dataset=datasetTrain, batch_size=trBatchSize, shuffle=True,  num_workers=24, pin_memory=True)
         dataLoaderVal = DataLoader(dataset=datasetVal, batch_size=trBatchSize, shuffle=False, num_workers=24, pin_memory=True)
-        
+
         #-------------------- SETTINGS: OPTIMIZER & SCHEDULER
         optimizer = optim.Adam (model.parameters(), lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
         scheduler = ReduceLROnPlateau(optimizer, factor = 0.1, patience = 5, mode = 'min')
@@ -113,20 +122,19 @@ class ChexnetTrainer ():
     def epochTrain (model, dataLoader, optimizer, scheduler, epochMax, classCount, loss):
         
         model.train()
-        
+
         for batchID, (input, target) in enumerate (dataLoader):
-                        
-            target = target.cuda(async = True)
-                 
-            varInput = torch.autograd.Variable(input)
-            varTarget = torch.autograd.Variable(target)         
-            varOutput = model(varInput)
-            
-            lossvalue = loss(varOutput, varTarget)
+
+            target = target.cuda(async = True)                 
+            output = model(input)
+
+            lossvalue = loss(output, target)
                        
             optimizer.zero_grad()
             lossvalue.backward()
             optimizer.step()
+
+            del lossvalue
             
     #-------------------------------------------------------------------------------- 
         
@@ -142,17 +150,22 @@ class ChexnetTrainer ():
         for i, (input, target) in enumerate (dataLoader):
             
             target = target.cuda(async=True)
-                 
-            varInput = torch.autograd.Variable(input, volatile=True)
-            varTarget = torch.autograd.Variable(target, volatile=True)    
-            varOutput = model(varInput)
-            
-            losstensor = loss(varOutput, varTarget)
-            losstensorMean += losstensor
+            output = model(input)
+
+            # varInput = torch.autograd.Variable(input, volatile=True)
+            # varTarget = torch.autograd.Variable(target, volatile=True)    
+            # varOutput = model(varInput)
+
+            # losstensor = loss(varOutput, varTarget)
+            losstensor = loss(output, target)
+            losstensorMean += float(losstensor)
             
 #             lossVal += losstensor.data[0]
-            lossVal += losstensor.data
+            # lossVal += float(losstensor.data)
+            lossVal += float(losstensor)
             lossValNorm += 1
+
+            del losstensor 
             
         outLoss = lossVal / lossValNorm
         losstensorMean = losstensorMean / lossValNorm
@@ -207,6 +220,8 @@ class ChexnetTrainer ():
         if nnArchitecture == 'DENSE-NET-121': model = DenseNet121(nnClassCount, nnIsTrained).cuda()
         elif nnArchitecture == 'DENSE-NET-169': model = DenseNet169(nnClassCount, nnIsTrained).cuda()
         elif nnArchitecture == 'DENSE-NET-201': model = DenseNet201(nnClassCount, nnIsTrained).cuda()
+        elif nnArchitecture == 'RES-NET-18': model = ResNet18(nnClassCount, nnIsTrained).cuda()
+        elif nnArchitecture == 'RES-NET-50': model = ResNet50(nnClassCount, nnIsTrained).cuda()
         
         model = torch.nn.DataParallel(model).cuda() 
         
