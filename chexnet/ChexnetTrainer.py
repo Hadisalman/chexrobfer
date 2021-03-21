@@ -108,7 +108,8 @@ class ChexnetTrainer ():
             timestampEND = timestampDate + '-' + timestampTime
             
 #             scheduler.step(losstensor.data[0])
-            scheduler.step(losstensor.data)
+            # scheduler.step(losstensor.data)
+            scheduler.step(losstensor)
             
             if lossVal < lossMIN:
                 lossMIN = lossVal    
