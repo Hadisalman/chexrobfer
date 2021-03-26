@@ -102,14 +102,12 @@ class ChexnetTrainer ():
             timestampSTART = timestampDate + '-' + timestampTime
 
             ChexnetTrainer.epochTrain (model, dataLoaderTrain, optimizer, scheduler, trMaxEpoch, nnClassCount, loss, epochID)
-            val_loss, lossVal, losstensor = ChexnetTrainer.epochVal (model, dataLoaderVal, optimizer, scheduler, trMaxEpoch, nnClassCount, loss, epochID)
+            val_loss = ChexnetTrainer.epochVal (model, dataLoaderVal, optimizer, scheduler, trMaxEpoch, nnClassCount, loss, epochID)
 
             timestampTime = time.strftime("%H%M%S")
             timestampDate = time.strftime("%d%m%Y")
             timestampEND = timestampDate + '-' + timestampTime
 
-#             scheduler.step(losstensor.data[0])
-            # scheduler.step(losstensor.data)
             scheduler.step(val_loss)
 
             if val_loss < lossMIN:
@@ -138,7 +136,7 @@ class ChexnetTrainer ():
             lossvalue.backward()
             optimizer.step()
             losses.update(lossvalue.item())
-            desc = f'Loss {losses.avg:.4f}'
+            desc = f'Train: Loss {losses.avg:.4f} | Epoch: {epoch+1}/{epochMax}'
             iterator.set_description(desc)
             iterator.refresh()
 
@@ -161,7 +159,7 @@ class ChexnetTrainer ():
             losstensor = loss(output, target)
 
             losses.update(losstensor.item())
-            desc = f'Loss {losses.avg:.4f}'
+            desc = f'Val: Loss {losses.avg:.4f}'
             iterator.set_description(desc)
             iterator.refresh()
 
