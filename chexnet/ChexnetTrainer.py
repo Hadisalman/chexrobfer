@@ -28,6 +28,7 @@ from ResnetModels import ResNet50
 
 from DatasetGenerator import DatasetGenerator
 
+from tqdm import tqdm
 
 #--------------------------------------------------------------------------------
 
@@ -77,7 +78,7 @@ class ChexnetTrainer ():
         dataLoaderVal = DataLoader(dataset=datasetVal, batch_size=trBatchSize, shuffle=False, num_workers=24, pin_memory=True)
 
         #-------------------- SETTINGS: OPTIMIZER & SCHEDULER
-        optimizer = optim.Adam (model.parameters(), lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
+        optimizer = optim.Adam (model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
         scheduler = ReduceLROnPlateau(optimizer, factor = 0.1, patience = 5, mode = 'min')
 
         #-------------------- SETTINGS: LOSS
@@ -100,33 +101,33 @@ class ChexnetTrainer ():
             timestampDate = time.strftime("%d%m%Y")
             timestampSTART = timestampDate + '-' + timestampTime
 
-            ChexnetTrainer.epochTrain (model, dataLoaderTrain, optimizer, scheduler, trMaxEpoch, nnClassCount, loss)
-            lossVal, losstensor = ChexnetTrainer.epochVal (model, dataLoaderVal, optimizer, scheduler, trMaxEpoch, nnClassCount, loss)
+            ChexnetTrainer.epochTrain (model, dataLoaderTrain, optimizer, scheduler, trMaxEpoch, nnClassCount, loss, epochID)
+            val_loss = ChexnetTrainer.epochVal (model, dataLoaderVal, optimizer, scheduler, trMaxEpoch, nnClassCount, loss, epochID)
 
             timestampTime = time.strftime("%H%M%S")
             timestampDate = time.strftime("%d%m%Y")
             timestampEND = timestampDate + '-' + timestampTime
 
-#             scheduler.step(losstensor.data[0])
-            # scheduler.step(losstensor.data)
-            scheduler.step(losstensor)
+            scheduler.step(val_loss)
 
-            if lossVal < lossMIN:
-                lossMIN = lossVal
+            if val_loss < lossMIN:
+                lossMIN = val_loss
                 torch.save({'epoch': epochID + 1, 'state_dict': model.state_dict(), 'best_loss': lossMIN, 'optimizer' : optimizer.state_dict()}, './models/m-' + launchTimestamp + '.pth.tar')
-                print ('Epoch [' + str(epochID + 1) + '] [save] [' + timestampEND + '] loss= ' + str(lossVal))
+                print ('Epoch [' + str(epochID + 1) + '] [save] [' + timestampEND + '] loss= ' + str(val_loss))
             else:
-                print ('Epoch [' + str(epochID + 1) + '] [----] [' + timestampEND + '] loss= ' + str(lossVal))
+                print ('Epoch [' + str(epochID + 1) + '] [----] [' + timestampEND + '] loss= ' + str(val_loss))
 
     #--------------------------------------------------------------------------------
 
-    def epochTrain (model, dataLoader, optimizer, scheduler, epochMax, classCount, loss):
+    def epochTrain (model, dataLoader, optimizer, scheduler, epochMax, classCount, loss, epoch):
 
         model.train()
+        losses = AverageMeter()
 
-        for batchID, (input, target) in enumerate (dataLoader):
+        iterator = tqdm(enumerate (dataLoader), total=len(dataLoader))
+        for batchID, (input, target) in iterator:
 
-            target = target.cuda(async = True)
+            target = target.cuda()
             output = model(input)
 
             lossvalue = loss(output, target)
@@ -134,44 +135,35 @@ class ChexnetTrainer ():
             optimizer.zero_grad()
             lossvalue.backward()
             optimizer.step()
+            losses.update(lossvalue.item())
+            desc = f'Train: Loss {losses.avg:.4f} | Epoch: {epoch+1}/{epochMax}'
+            iterator.set_description(desc)
+            iterator.refresh()
 
             del lossvalue
 
     #--------------------------------------------------------------------------------
 
-    def epochVal (model, dataLoader, optimizer, scheduler, epochMax, classCount, loss):
+    def epochVal (model, dataLoader, optimizer, scheduler, epochMax, classCount, loss, epoch):
 
         model.eval ()
+        losses = AverageMeter()
 
-        lossVal = 0
-        lossValNorm = 0
 
-        losstensorMean = 0
+        iterator = tqdm(enumerate (dataLoader), total=len(dataLoader))
+        for i, (input, target) in iterator:
 
-        for i, (input, target) in enumerate (dataLoader):
-
-            target = target.cuda(async=True)
+            target = target.cuda()
             output = model(input)
 
-            # varInput = torch.autograd.Variable(input, volatile=True)
-            # varTarget = torch.autograd.Variable(target, volatile=True)
-            # varOutput = model(varInput)
-
-            # losstensor = loss(varOutput, varTarget)
             losstensor = loss(output, target)
-            losstensorMean += float(losstensor)
 
-#             lossVal += losstensor.data[0]
-            # lossVal += float(losstensor.data)
-            lossVal += float(losstensor)
-            lossValNorm += 1
+            losses.update(losstensor.item())
+            desc = f'Val: Loss {losses.avg:.4f}'
+            iterator.set_description(desc)
+            iterator.refresh()
 
-            del losstensor
-
-        outLoss = lossVal / lossValNorm
-        losstensorMean = losstensorMean / lossValNorm
-
-        return outLoss, losstensorMean
+        return losses.avg
 
     #--------------------------------------------------------------------------------
 
@@ -286,6 +278,22 @@ class ChexnetTrainer ():
         return
 #--------------------------------------------------------------------------------
 
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 
 
